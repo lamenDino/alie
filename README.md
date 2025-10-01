@@ -1,14 +1,15 @@
 # Telegram AliExpress Affiliate Bot
 
-Bot Telegram per generare link affiliati AliExpress automatizzati.
+Bot Telegram per generare link affiliati AliExpress con anteprima prodotto.
 
 ## Setup
 
-1. Crea un file `.env` con:
+1. Crea file `.env`:
    ```
    TELEGRAM_BOT_TOKEN=il_tuo_token_bot
    ADMIN_USER_ID=il_tuo_id_telegram
    AFFILIATE_ID=il_tuo_affiliate_id  # es. 46327ec42fb54c13877458a54e994be4-1759353537020-06756-_EHcD5Rs
+   PORT=8080
    ```
 
 2. Installa dipendenze:
@@ -18,12 +19,9 @@ Bot Telegram per generare link affiliati AliExpress automatizzati.
 
 ## Deploy su Render
 
-- Tipo di servizio: Background Worker (solo polling)
+- Tipo di servizio: Web Service
+- Espone porta definita da `PORT`
 - Start command:
   ```
   python bot_affiliate.py
   ```
-
-## Utilizzo
-
-Invia un link AliExpress nel bot e riceverai il link affiliato corrispondente.
