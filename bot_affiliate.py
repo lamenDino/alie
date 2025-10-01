@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """
 Bot Telegram per generare link affiliati AliExpress con PID predefinito
-Elimina il link inviato, mostra chi l'ha mandato, invia immagine + descrizione,
-poi separa “Link inviato da” e “Link affiliazione” in due righe.
-Gestisce fallback se informazioni mancanti.
+Gestisce link diretti e s.click.aliexpress.com, elimina messaggio inviato,
+mostra chi l'ha inviato, invia immagine + descrizione, separa Link inviato da e Link affiliazione.
 """
-
 import os
 import logging
 import asyncio
@@ -18,19 +16,29 @@ from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
 
-# Carica variabili ambiente
 load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 ADMIN_USER_ID = int(os.getenv('ADMIN_USER_ID', '0'))
 AFFILIATE_ID = os.getenv('AFFILIATE_ID')
 PORT = int(os.getenv('PORT', '8080'))
 
-# Configura logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+
+def resolve_click_url(url: str) -> str:
+    """
+    Se è un link s.click.aliexpress.com, segue redirect per ottenere URL finale
+    """
+    try:
+        resp = requests.get(url, timeout=10)
+        return resp.url
+    except Exception as e:
+        logger.error(f"Errore risoluzione click URL: {e}")
+        return url
 
 
 def make_affiliate_link(url: str) -> str:
@@ -63,6 +71,7 @@ def fetch_product_info(url: str) -> dict:
         logger.error(f"Errore fetch info: {e}")
     return info
 
+
 async def handle_health(request):
     return web.Response(text="OK")
 
@@ -76,14 +85,14 @@ async def start_webserver():
     logger.info(f"Web server started on port {PORT}")
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Inviami un link AliExpress e restituisco anteprima e link affiliato.")
+    await update.message.reply_text("👋 Inviami un link AliExpress (diretto o breve) e restituisco anteprima e link affiliato.")
 
 async def affiliate_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     user = message.from_user
-    url = message.text.strip()
+    raw_url = message.text.strip()
 
-    if 'aliexpress.com' not in url.lower():
+    if 'aliexpress.com' not in raw_url.lower():
         await message.reply_text("❌ Non vedo un link AliExpress valido. Riprova.")
         return
 
@@ -92,10 +101,11 @@ async def affiliate_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         pass
 
-    info = fetch_product_info(url)
-    aff_link = make_affiliate_link(url)
+    # Risolvi eventuale link s.click.aliexpress.com
+    final_url = resolve_click_url(raw_url)
+    info = fetch_product_info(final_url)
+    aff_link = make_affiliate_link(final_url)
 
-    # Costruisci caption
     caption_lines = []
     if info['title']:
         caption_lines.append(f"*{info['title']}*")
@@ -105,7 +115,6 @@ async def affiliate_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not caption.strip():
         caption = "ℹ️ Informazioni prodotto non disponibili."
 
-    # Invia media + testo
     if info['image']:
         await context.bot.send_photo(
             chat_id=message.chat_id,
@@ -120,7 +129,6 @@ async def affiliate_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN
         )
 
-    # Invia dettagli link
     details = (
         f"🔗 Link inviato da: *{user.full_name}*\n\n"
         f"🛒 Link affiliazione:\n{aff_link}"
